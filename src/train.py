@@ -16,12 +16,12 @@ from torch import nn
 try:  # imported as a package: python -m src.train
     from .data import DEFAULT_DATA_PATH, load_clean
     from .features import Datasets, build_datasets
-    from .model import RegressionModel
+    from .model import RegressionModel, save_checkpoint
 except ImportError:  # run as a script: python src/train.py
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from src.data import DEFAULT_DATA_PATH, load_clean
     from src.features import Datasets, build_datasets
-    from src.model import RegressionModel
+    from src.model import RegressionModel, save_checkpoint
 
 
 def train(
@@ -106,9 +106,13 @@ def main(argv: list[str] | None = None) -> None:
         predictions = model(data.X_test.to(device)).cpu().numpy()
     print(f"Final test R^2: {r2_score(data.y_test.numpy(), predictions):.4f}")
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(model.state_dict(), args.output)
-    print(f"Saved state dict to {args.output}")
+    save_checkpoint(
+        args.output,
+        model,
+        scaler=data.scaler,
+        feature_names=data.feature_names,
+    )
+    print(f"Saved checkpoint with scaler to {args.output}")
 
 
 if __name__ == "__main__":
