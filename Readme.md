@@ -9,15 +9,18 @@ Real benzene sensors are expensive and need regular calibration. This project bu
 ```
 Air Quality Data/   UCI dataset (AirQualityUCI.csv is what the code reads)
 Images/             per-experiment prediction and residual plots
-models/             trained state dicts, including "Regression Model.pth"
+models/             checkpoints, including the shipped "Regression Model.pth"
 notebooks/          original analysis notebook (EDA, experiments, plots)
 src/                packaged pipeline
   data.py           loading and cleaning
   features.py       feature/target split, scaling, tensors
-  model.py          network definition and checkpoint loader
+  model.py          network definition, checkpoint load/save, raw prediction
   train.py          training entry point
   evaluate.py       evaluation entry point
+tests/              pytest suite for cleaning, checkpoints, and metrics
 requirements.txt
+requirements-dev.txt
+pytest.ini
 ```
 
 The notebook is the narrative record of the analysis and keeps its own copy of the code; `src/` is the reusable version with command line entry points.
@@ -118,33 +121,48 @@ Both modules also run as plain scripts: `python src/train.py` and `python src/ev
 
 ## Using the saved model
 
+Checkpoints written by `src/train.py` store the weights, architecture, feature order, and scaler statistics, so raw sensor values can be predicted directly:
+
+```python
+import pandas as pd
+from src.model import load_checkpoint
+
+checkpoint = load_checkpoint("models/regression_model.pth")
+row = pd.DataFrame([{
+    "CO(GT)": 2.6, "PT08.S1(CO)": 1360.0, "PT08.S2(NMHC)": 1046.0,
+    "NOx(GT)": 166.0, "PT08.S3(NOx)": 1056.0, "NO2(GT)": 113.0,
+    "PT08.S4(NO2)": 1692.0, "PT08.S5(O3)": 1268.0, "T": 13.6,
+    "RH": 48.9, "AH": 0.7578,
+}])
+benzene = checkpoint.predict_raw(row)  # shape (1,), mg/m³
+```
+
+`predict_raw` applies the stored scaler and reorders columns by the training feature order, so column order in the dataframe does not matter. A NumPy array is accepted too.
+
+When only the model object is needed, use the loader directly:
+
 ```python
 from src.model import load_model
 
-model = load_model("models/Regression Model.pth")  # eval mode, CPU
+model = load_model("models/Regression Model.pth")  # eval mode, CPU; architecture inferred
 ```
 
-Or explicitly:
+The shipped `models/Regression Model.pth` predates the bundle format and holds weights only, so it loads fine but `predict_raw` raises `ValueError` for it. Retrain to produce a checkpoint that carries the scaler.
 
-```python
-import torch
-from src.model import RegressionModel
+## Tests
 
-model = RegressionModel(11, 1, hidden_units=256, num_hidden_layers=2)
-model.load_state_dict(
-    torch.load("models/Regression Model.pth", map_location="cpu", weights_only=True)
-)
-model.eval()
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
 ```
 
-The checkpoint expects **standardized** inputs, produced by the training split's scaler. `src.features.build_datasets` rebuilds that split (same seed) and returns the fitted scaler alongside the tensors.
+14 tests cover the cleaning rules (including long-gap handling), checkpoint round-trips with scaler and architecture inference, rejection of a mismatched architecture, and the metric formulas. The suite reads the committed dataset and checkpoint, so it runs offline.
 
 ## Notes and limitations
 
 - Training is full-batch and runs on CPU; 200 epochs take well under a minute for this dataset.
-- The scaler is not stored inside the checkpoint, so raw values need the same preprocessing before inference.
+- The shipped checkpoint stores weights only; checkpoints produced by `src/train.py` also carry the scaler, feature order, and architecture.
 - Metrics vary between runs because weight initialization and training are stochastic.
-- There is no test suite yet; `src/evaluate.py` is the current reproducibility check.
 
 ## Dataset
 
