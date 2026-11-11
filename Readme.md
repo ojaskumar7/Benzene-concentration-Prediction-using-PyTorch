@@ -88,6 +88,27 @@ Residuals on the same split: mean absolute error **0.1259**, **99.3%** of predic
 
 A freshly trained checkpoint (seed 42, 200 epochs) reaches test MSE 0.0779, RMSE 0.2791, and R² 0.9987. Re-run the commands below to refresh these numbers.
 
+## Baselines and time-based validation
+
+The 0.9992 above comes from a random 80/20 split. Because the rows are hourly observations, a random split places neighbouring hours in both sets, which can flatter any model. These diagnostics put the network in context; the baselines are scikit-learn `LinearRegression` on the same scaled inputs.
+
+| Split | Model | MSE | R² |
+| :--- | :--- | ---: | ---: |
+| Random 80/20, seed 42 | PyTorch 2 × 256 (shipped) | **0.0486** | **0.9992** |
+| Random 80/20, seed 42 | Linear, 11 features | 1.4442 | 0.9753 |
+| First 80% of hours → last 20% | PyTorch 2 × 256, retrained 200 epochs | **0.1049** | **0.9973** |
+| First 80% of hours → last 20% | Linear, 11 features | 2.5021 | 0.9364 |
+| Random 80/20, seed 42 | Linear, `PT08.S2(NMHC)` only | 2.3394 | 0.9600 |
+| Random 80/20, seed 42 | Linear, without `PT08.S2` | 3.1171 | 0.9467 |
+
+**Reading the table**
+
+- The network is not just riding on linear correlation: it cuts MSE by roughly 30× against a linear model on the random split, and by roughly 24× out of time (0.1049 vs 2.5021). The gap widens when the test rows are later in time.
+- Out-of-time accuracy (0.9973) stays close to the random-split figure, so the headline result is not purely a leakage artifact — although the later period is different (mean concentration 7.79 mg/m³).
+- `PT08.S2(NMHC)` correlates **0.982** with benzene and alone gives R² 0.96, so much of the signal sits in one sensor. Without it, the remaining features still reach 0.95 linearly: the "virtual sensor" premise holds, but the hard part of the problem is not the remaining sensors.
+
+These runs are diagnostics produced with the same cleaning and split code; they are not part of the pytest suite, and the chronological model was not saved as a checkpoint.
+
 ## Usage
 
 Train a model (writes `models/regression_model.pth` by default, leaving the shipped checkpoint untouched):
