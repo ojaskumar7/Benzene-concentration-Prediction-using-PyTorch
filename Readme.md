@@ -17,7 +17,8 @@ src/                packaged pipeline
   model.py          network definition, checkpoint load/save, raw prediction
   train.py          training entry point
   evaluate.py       evaluation entry point
-tests/              pytest suite for cleaning, checkpoints, and metrics
+  predict.py        raw-CSV scoring entry point
+tests/              pytest suite for cleaning, checkpoints, metrics, predict
 requirements.txt
 requirements-dev.txt
 pytest.ini
@@ -103,7 +104,16 @@ python -m src.evaluate
 python -m src.evaluate --model models/regression_model.pth
 ```
 
-Both modules also run as plain scripts: `python src/train.py` and `python src/evaluate.py`.
+Score a CSV of raw, unscaled sensor rows:
+
+```bash
+python -m src.predict --input rows.csv --output predictions.csv
+python -m src.predict --input rows.csv --sep ";" --decimal "," --model models/regression_model.pth
+```
+
+The input needs the 11 feature columns in any order (extra columns are kept as-is); the output is a copy of the input with a `Predicted C6H6(GT)` column appended. For the weights-only shipped checkpoint the scaler is rebuilt from the default training split automatically.
+
+All entry points also run as plain scripts: `python src/train.py`, `python src/evaluate.py`, `python src/predict.py`.
 
 | Flag | Default | Used by |
 | :--- | :--- | :--- |
@@ -115,7 +125,10 @@ Both modules also run as plain scripts: `python src/train.py` and `python src/ev
 | `--test-size` | `0.2` | train, evaluate |
 | `--seed` | `42` | train, evaluate |
 | `--output` | `models/regression_model.pth` | train |
-| `--model` | `models/Regression Model.pth` | evaluate |
+| `--model` | `models/Regression Model.pth` | evaluate, predict |
+| `--input` | required | predict |
+| `--sep` | `,` | predict |
+| `--decimal` | `.` | predict |
 
 `--hidden-layers` follows the notebook's convention, so the default of 2 matches the shipped checkpoint.
 
@@ -147,7 +160,7 @@ from src.model import load_model
 model = load_model("models/Regression Model.pth")  # eval mode, CPU; architecture inferred
 ```
 
-The shipped `models/Regression Model.pth` predates the bundle format and holds weights only, so it loads fine but `predict_raw` raises `ValueError` for it. Retrain to produce a checkpoint that carries the scaler.
+The shipped `models/Regression Model.pth` predates the bundle format and holds weights only, so it loads fine but `predict_raw` raises `ValueError` for it. The `src.predict` CLI handles this case by rebuilding the scaler from the default training split; retrain to produce a self-contained checkpoint.
 
 ## Tests
 
@@ -156,7 +169,7 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-14 tests cover the cleaning rules (including long-gap handling), checkpoint round-trips with scaler and architecture inference, rejection of a mismatched architecture, and the metric formulas. The suite reads the committed dataset and checkpoint, so it runs offline.
+18 tests cover the cleaning rules (including long-gap handling), checkpoint round-trips with scaler and architecture inference, rejection of a mismatched architecture, the metric formulas, and the predict CLI (output columns, reordered and semicolon/comma input, missing columns, and the weights-only fallback). The suite reads the committed dataset and checkpoint, so it runs offline.
 
 ## Notes and limitations
 
