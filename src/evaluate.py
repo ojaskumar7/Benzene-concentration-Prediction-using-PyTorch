@@ -34,6 +34,18 @@ except ImportError:  # run as a script: python src/evaluate.py
     )
 
 
+def compute_metrics(y_true, predictions) -> dict[str, float]:
+    """Return MSE, RMSE and R2 for regression predictions."""
+    y_true = np.asarray(y_true, dtype=np.float64).ravel()
+    predictions = np.asarray(predictions, dtype=np.float64).ravel()
+    mse = float(mean_squared_error(y_true, predictions))
+    return {
+        "mse": mse,
+        "rmse": float(np.sqrt(mse)),
+        "r2": float(r2_score(y_true, predictions)),
+    }
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, default=DEFAULT_DATA_PATH)
@@ -63,12 +75,12 @@ def main(argv: list[str] | None = None) -> None:
         predictions = model(data.X_test.to(device)).cpu().numpy()
     y_true = data.y_test.numpy()
 
-    mse = mean_squared_error(y_true, predictions)
+    metrics = compute_metrics(y_true, predictions)
     print(f"Model: {args.model}")
     print(f"Test rows: {len(y_true)} | Features: {len(data.feature_names)}")
-    print(f"MSE: {mse:.4f}")
-    print(f"RMSE: {np.sqrt(mse):.4f}")
-    print(f"R^2: {r2_score(y_true, predictions):.4f}")
+    print(f"MSE: {metrics['mse']:.4f}")
+    print(f"RMSE: {metrics['rmse']:.4f}")
+    print(f"R^2: {metrics['r2']:.4f}")
 
 
 if __name__ == "__main__":
