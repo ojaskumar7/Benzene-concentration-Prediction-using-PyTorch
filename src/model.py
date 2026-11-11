@@ -90,7 +90,12 @@ class Checkpoint:
         if values.ndim == 1:
             values = values.reshape(1, -1)
 
-        scaled = self.scaler.transform(values)
+        # Scale with named columns when the scaler was fitted on a dataframe, so
+        # sklearn does not warn about missing feature names.
+        if self.feature_names is not None and hasattr(self.scaler, "feature_names_in_"):
+            scaled = self.scaler.transform(pd.DataFrame(values, columns=self.feature_names))
+        else:
+            scaled = self.scaler.transform(values)
         device = next(self.model.parameters()).device
         tensor = torch.as_tensor(scaled, dtype=torch.float32, device=device)
 
